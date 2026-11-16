@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Small stand-in for a LernFlip lesson: same classes and data-action names as
+     the real page, so the bot can be tried without touching the site. -->
+<html lang="de"><head><meta charset="utf-8"><title>Mock-Lektion</title>
+<style>body{font-family:sans-serif;background:#111;color:#eee;padding:20px}
+.q-ans{display:block;margin:6px 0;padding:8px;width:300px}.correct{background:#2a6}.wrong{background:#a33}.sel{outline:2px solid #6cf}</style>
+</head><body><div id="root"></div>
+<script>
+const stations = [
+  { type: "input" },
+  { type: "quiz", qs: [
+    { q: "Welche Taste startet das Programm?", opts: ["Tab","ESC","F1","F5"], correct: [3] },
+    { q: "Welche sind Datentypen in C#?", opts: ["int","banane","string","blau"], correct: [0,2], multi: true },
+  ]},
+  { type: "task", checks: 2 },
+];
+let idx = 0, quiz = null, checks = {}, done = {};
+const shuffle = n => { const a=[...Array(n).keys()]; for(let i=n-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; };
+function render() {
+  const r = document.getElementById("root");
+  if (idx >= stations.length) { r.innerHTML = '<div class="ldn-karte"><h2>Lektion geschafft!</h2></div>'; return; }
+  const s = stations[idx];
+  let h = '<div class="lesson-top">Station ' + (idx+1) + '</div>';
+  if (s.type === "input") h += done[idx] ? '<button data-action="next-station">Weiter</button>' : '<p>Text…</p><button data-action="complete-input">Verstanden</button>';
+  if (s.type === "task") {
+    for (let i=0;i<s.checks;i++) h += '<div class="check-item'+(checks[i]?' checked':'')+'" data-action="task-check" data-i="'+i+'">Schritt '+i+'</div>';
+    const all = Object.keys(checks).length === s.checks;
+    h += '<button data-action="complete-task"'+(all?'':' disabled')+'>Erledigt</button>';
+  }
+  if (s.type === "quiz") {
+    if (!quiz) quiz = { phase: "intro" };
+    h += '<div class="q-card">';
+    if (quiz.phase === "intro") h += '<button data-action="q-start" data-id="s1">Jetzt starten</button>';
+    else if (quiz.phase === "result") h += '<p>' + quiz.score + ' von ' + s.qs.length + ' Punkten</p><button data-action="q-retry" data-id="s1">Wiederholen</button><button data-action="next-station">Weiter</button>';
+    else {
+      const qq = s.qs[quiz.i]; quiz.order ||= shuffle(qq.opts.length);
+      h += '<h2>' + qq.q + '</h2>' + (qq.multi ? '<span class="q-multi-tag">Mehrfach</span>' : '');
+      for (const o of quiz.order) {
+        const isSel = quiz.sel.includes(o), ok = qq.correct.includes(o);
+        let cls = "q-ans", st = "";
+        if (quiz.checked) { if (ok && isSel) cls += " correct"; else if (!ok && isSel) cls += " wrong"; else if (ok) st = "Ausgelassen!"; }
+        else if (isSel) cls += " sel";
+        h += '<div class="q-ans-wrap"><span class="q-status">'+st+'</span><button class="'+cls+'"'+(quiz.checked?' disabled':' data-action="q-sel" data-o="'+o+'"')+'><span class="q-ans-tx">'+qq.opts[o]+'</span></button></div>';
+      }
+      h += quiz.checked ? '<button data-action="q-next">Weiter</button>' : '<button data-action="q-check"'+(quiz.sel.length?'':' disabled')+'>Überprüfen</button>';
+    }
+    h += '</div>';
+  }
+  r.innerHTML = h;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-action]"); if (!t) return;
+  const a = t.dataset.action, s = stations[idx];
+  if (a === "complete-input" || a === "next-station") { done[idx] = true; idx++; quiz = null; checks = {}; }
+  if (a === "task-check") checks[t.dataset.i] = true;
+  if (a === "complete-task") { idx++; checks = {}; }
+  if (a === "q-start" || a === "q-retry") quiz = { phase: "q", i: 0, sel: [], checked: false, score: 0 };
+  if (a === "q-sel") { const o = +t.dataset.o, qq = s.qs[quiz.i]; quiz.sel = qq.multi ? (quiz.sel.includes(o) ? quiz.sel.filter(x=>x!==o) : [...quiz.sel,o]) : [o]; }
+  if (a === "q-check") { const qq = s.qs[quiz.i]; quiz.checked = true; if (quiz.sel.length===qq.correct.length && quiz.sel.every(x=>qq.correct.includes(x))) quiz.score++; }
+  if (a === "q-next") { if (quiz.i < s.qs.length-1) { quiz.i++; quiz.sel=[]; quiz.checked=false; quiz.order=null; } else quiz.phase = "result"; }
+  render();
+});
+render();
+</script></body></html>
