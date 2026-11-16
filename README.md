@@ -1,14 +1,14 @@
-# LernFlip-Bot
+# LernFlip Bot
 
-Automatisiert eine LernFlip-**Lektion** im Browser: liest jede Station, klickt
-„Verstanden", hakt Aufgaben ab und beantwortet die Quizze. Gedacht für das
-Tester-Konto, das die Kurs-Leitung ausgegeben hat.
+Automates a LernFlip **lesson** in the browser: reads every station, clicks
+"Understood", checks off tasks, and answers the quizzes. It is intended for the
+tester account provided by the course administration.
 
-Der Bot startet **keine** Lektion von selbst: der Browser öffnet sich, du
-meldest dich an und öffnest eine Lektion – dann legt er los. Am Ende der Lektion
-stoppt er (außer mit `--all`).
+The bot does **not** start a lesson on its own: the browser opens, you log in
+and open a lesson, and then it gets started. It stops at the end of the lesson
+(unless used with `--all`).
 
-## Einmalig einrichten
+## One-time setup
 
 ```bash
 cd ~/Documents/projects/lernflip-bot
@@ -16,78 +16,76 @@ npm install          # Playwright
 npx playwright install chromium
 ```
 
-## Starten
+## Starting
 
-| Befehl | Was es tut |
+| Command | What it does |
 |---|---|
-| `node bot.mjs` | Grundmodus: rät, lernt die richtige Antwort aus der Rückmeldung, wiederholt bis zur vollen Punktzahl. Gelerntes landet in `answers.json` und wird beim nächsten Mal wiederverwendet. |
-| `node bot.mjs --ai` | Ein lokales Modell (Standard `qwen3:4b` über Ollama) beantwortet die Fragen. Falsches wird per Rückmeldung + Wiederholung trotzdem korrigiert. |
-| `node bot.mjs --all` | Nach der Lektion automatisch weiter zur nächsten. Mit jedem Modus kombinierbar. |
-| `node bot.mjs --debug` | Loggt alle paar Sekunden URL und erkannte Seiten-Merkmale (zur Fehlersuche). |
-| `node bot.mjs --headless` | Ohne sichtbares Fenster. |
-| `node bot.mjs --url <adresse>` | Startseite festlegen (Standard `https://lernflip.com/app`). |
+| `node bot.mjs` | Basic mode: guesses, learns the correct answer from the feedback, and repeats until the full score is achieved. Learned answers are stored in `answers.json` and reused next time. |
+| `node bot.mjs --ai` | A local model (by default, `qwen3:4b` through Ollama) answers the questions. Incorrect answers are still corrected through feedback and repetition. |
+| `node bot.mjs --all` | Automatically continues to the next lesson after the current one. Can be combined with any mode. |
+| `node bot.mjs --debug` | Logs the URL and detected page features every few seconds (for troubleshooting). |
+| `node bot.mjs --headless` | Runs without a visible window. |
+| `node bot.mjs --url <address>` | Sets the start page (default: `https://lernflip.com/app`). |
 
-Kombinieren geht, z. B.:
-
-```bash
-node bot.mjs --ai --all          # lokales Modell, ganze Kursreihe
-node bot.mjs --ai --debug        # Modell + Diagnoseausgabe
-```
-
-## Wie der Bot arbeitet
-
-Der Bot steuert kein eigenes Browser-Fenster fern, sondern ein normales
-Chromium über [Playwright](https://playwright.dev). Das Fenster nutzt ein
-eigenes Profil (`profile/`), damit dein Login erhalten bleibt und vom normalen
-Browser getrennt ist.
-
-**Zustands-Schleife.** Alle paar hundert Millisekunden schaut der Bot auf die
-Seite und entscheidet anhand der sichtbaren Buttons (`data-action`-Attribute),
-was als Nächstes dran ist: Info-Station bestätigen, Aufgabe abhaken, Quiz
-starten, Frage beantworten, Ergebnis wiederholen oder zur nächsten Station
-gehen. Ist nichts davon da, wartet er – so merkt er von selbst, wenn du eine
-Lektion öffnest.
-
-**Fragen beantworten.** Er liest Frage und Antwort-Optionen aus dem DOM. Pro
-Frage gilt der Reihe nach:
-
-1. Steht die richtige Antwort schon in `answers.json`, wird sie direkt geklickt.
-2. Sonst, mit `--ai`, beantwortet das lokale Modell die Frage (Optionen werden
-   nummeriert, es nennt nur die Ziffer(n)).
-3. Sonst wird geraten – aber keine Option, die vorher schon als falsch
-   markiert wurde.
-
-**Aus der Rückmeldung lernen.** Nach dem Klick auf „Prüfen" zeigt die Seite,
-welche Optionen richtig waren. Der Bot liest das aus, speichert die richtigen
-Antworten in `answers.json` und merkt sich die falschen. Beim Wiederholen (oder
-beim nächsten Durchlauf) sitzt dann jede Antwort. So kommt der Grundmodus ohne
-Vorwissen auf die volle Punktzahl – er braucht nur eventuell einen zweiten
-Versuch.
-
-**Mehrfachauswahl** erkennt er am `q-multi-tag` und klickt entsprechend mehrere
-Optionen an.
-
-## Lokales Modell (für `--ai`)
-
-Standard ist [Ollama](https://ollama.com) mit `qwen3:4b`:
+Options can be combined, for example:
 
 ```bash
-ollama serve &        # Server starten
-ollama pull qwen3:4b  # Modell holen (~2,6 GB)
+node bot.mjs --ai --all          # local model, entire course series
+node bot.mjs --ai --debug        # model + diagnostic output
 ```
 
-Anderes Modell / anderer Server über Umgebungsvariablen:
+## How the bot works
+
+The bot does not remotely control a separate browser window; instead, it
+controls a normal Chromium browser through [Playwright](https://playwright.dev).
+The window uses its own profile (`profile/`) so that your login is preserved and
+kept separate from your regular browser.
+
+**State loop.** Every few hundred milliseconds, the bot examines the page and
+uses the visible buttons (`data-action` attributes) to decide what to do next:
+confirm an information station, check off a task, start a quiz, answer a
+question, repeat a result, or move to the next station. If none of these are
+present, it waits—this allows it to detect automatically when you open a lesson.
+
+**Answering questions.** It reads the question and answer options from the DOM.
+For each question, it proceeds in this order:
+
+1. If the correct answer is already in `answers.json`, it clicks it directly.
+2. Otherwise, with `--ai`, the local model answers the question (the options
+   are numbered, and it returns only the digit(s)).
+3. Otherwise, it guesses—but not an option that was previously marked as
+   incorrect.
+
+**Learning from feedback.** After clicking "Check", the page shows which
+options were correct. The bot reads this, stores the correct answers in
+`answers.json`, and remembers the incorrect ones. When repeating the question
+(or on the next run), every answer is then correct. This allows basic mode to
+achieve a full score without prior knowledge—it may only need a second attempt.
+
+It detects **multiple choice** questions using `q-multi-tag` and clicks the
+corresponding multiple options.
+
+## Local model (for `--ai`)
+
+The default is [Ollama](https://ollama.com) with `qwen3:4b`:
+
+```bash
+ollama serve &        # start the server
+ollama pull qwen3:4b  # download the model (~2.6 GB)
+```
+
+Use environment variables to select a different model or server:
 
 ```bash
 AI_MODEL=qwen3:8b node bot.mjs --ai
-AI_URL=http://localhost:8080/v1/chat/completions node bot.mjs --ai   # z. B. llama.cpp
+AI_URL=http://localhost:8080/v1/chat/completions node bot.mjs --ai   # e.g. llama.cpp
 ```
 
-Erwartet wird ein OpenAI-kompatibler `/v1/chat/completions`-Endpunkt.
+An OpenAI-compatible `/v1/chat/completions` endpoint is expected.
 
-## Dateien
+## Files
 
-- `bot.mjs` – der Bot
-- `answers.json` – gelernte Antworten (wird automatisch angelegt)
-- `profile/` – eigener Browser-Login, getrennt vom normalen Browser
-- `test/mock.html` – Nachbau einer Lektion zum Testen ohne die echte Seite
+- `bot.mjs` – the bot
+- `answers.json` – learned answers (created automatically)
+- `profile/` – separate browser login, isolated from the regular browser
+- `test/mock.html` – replica of a lesson for testing without the real site
